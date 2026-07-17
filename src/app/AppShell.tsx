@@ -22,6 +22,7 @@ import { downloadBlob, downloadCsv, downloadFile, loadLocal, saveLocal } from "@
 import { createStudioDocx } from "@/lib/studioDocx";
 import { formats, funnels, goals, initialBrandSections, initialContent, initialHooks, initialOffer, initialTemplates, pillars, series, statuses } from "@/lib/knowledge";
 import type { BrandBookSection, BrandSection, ContentItem, ContentProductionItem, Format, FunnelOffer, HookItem, ProductionState, ScriptTemplate, ViewId } from "@/lib/types";
+import { loadWorkspaceLocal, saveWorkspaceLocal, useWorkspace, WorkspaceProvider } from "@/lib/workspaces";
 
 const contentKey = "grr-content";
 const hooksKey = "grr-hooks";
@@ -88,8 +89,17 @@ const blankContent = (): ContentItem => ({
   }
 });
 
-export function AppShell({ initialView = "dashboard", initialProductionId = "", initialProductionMode = "kanban" }: { initialView?: ViewId; initialProductionId?: string; initialProductionMode?: "kanban" | "list" | "studio" } = {}) {
+export function AppShell(props: { initialView?: ViewId; initialProductionId?: string; initialProductionMode?: "kanban" | "list" | "studio" } = {}) {
+  return (
+    <WorkspaceProvider>
+      <AppShellContent {...props} />
+    </WorkspaceProvider>
+  );
+}
+
+function AppShellContent({ initialView = "dashboard", initialProductionId = "", initialProductionMode = "kanban" }: { initialView?: ViewId; initialProductionId?: string; initialProductionMode?: "kanban" | "list" | "studio" } = {}) {
   const router = useRouter();
+  const { workspace } = useWorkspace();
   const [view, setView] = useState<ViewId>(initialView);
   const [content, setContent] = useState<ContentItem[]>(initialContent);
   const [hooks, setHooks] = useState<HookItem[]>(initialHooks);
@@ -100,28 +110,32 @@ export function AppShell({ initialView = "dashboard", initialProductionId = "", 
   const [offer, setOffer] = useState<FunnelOffer[]>(initialOffer);
   const [toast, setToast] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState("");
 
   useEffect(() => {
     const hashView = window.location.hash.replace("#", "");
     if (hashView === "brand-book") setView("brandBook");
     if (window.location.pathname === "/produccion") setView("production");
-    setContent(loadLocal(contentKey, initialContent));
-    setHooks(loadLocal(hooksKey, initialHooks));
-    setTemplates(loadLocal(templatesKey, initialTemplates));
-    setBrand(loadLocal(brandKey, initialBrandSections));
-    setBrandBook(loadLocal(brandBookKey, initialBrandBookSections));
-    setProduction(loadLocal(productionKey, initialProductionItems));
-    setOffer(loadLocal(offerKey, initialOffer));
+    setContent(loadWorkspaceLocal(workspace, contentKey, initialContent));
+    setHooks(loadWorkspaceLocal(workspace, hooksKey, initialHooks));
+    setTemplates(loadWorkspaceLocal(workspace, templatesKey, initialTemplates));
+    setBrand(loadWorkspaceLocal(workspace, brandKey, initialBrandSections));
+    setBrandBook(loadWorkspaceLocal(workspace, brandBookKey, initialBrandBookSections));
+    setProduction(loadWorkspaceLocal(workspace, productionKey, initialProductionItems));
+    setOffer(loadWorkspaceLocal(workspace, offerKey, initialOffer));
+    setLoadedWorkspaceId(workspace.id);
     setHydrated(true);
-  }, []);
+  }, [workspace]);
 
-  useEffect(() => { if (hydrated) saveLocal(contentKey, content); }, [content, hydrated]);
-  useEffect(() => { if (hydrated) saveLocal(hooksKey, hooks); }, [hooks, hydrated]);
-  useEffect(() => { if (hydrated) saveLocal(templatesKey, templates); }, [templates, hydrated]);
-  useEffect(() => { if (hydrated) saveLocal(brandKey, brand); }, [brand, hydrated]);
-  useEffect(() => { if (hydrated) saveLocal(brandBookKey, brandBook); }, [brandBook, hydrated]);
-  useEffect(() => { if (hydrated) saveLocal(productionKey, production); }, [production, hydrated]);
-  useEffect(() => { if (hydrated) saveLocal(offerKey, offer); }, [offer, hydrated]);
+  const workspaceReady = hydrated && loadedWorkspaceId === workspace.id;
+
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, contentKey, content); }, [content, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, hooksKey, hooks); }, [hooks, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, templatesKey, templates); }, [templates, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, brandKey, brand); }, [brand, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, brandBookKey, brandBook); }, [brandBook, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, productionKey, production); }, [production, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, offerKey, offer); }, [offer, workspace, workspaceReady]);
 
   const flash = (message: string) => {
     setToast(message);
@@ -135,6 +149,7 @@ export function AppShell({ initialView = "dashboard", initialProductionId = "", 
       <aside className="thin-lines sticky top-0 z-20 border-b border-white/10 bg-navy px-5 py-5 text-white lg:h-screen lg:border-b-0 lg:border-r lg:border-gold/20">
         <div className="mb-8">
           <p className="text-xs uppercase tracking-[0.32em] text-gold">Content OS</p>
+          <WorkspaceSelector />
           <h1 className="mt-3 text-2xl font-semibold leading-tight">Guía Restaurante Rentable</h1>
           <p className="mt-3 text-sm leading-6 text-white/68">Abre con un plan. Opera con control. Crece con rentabilidad.</p>
         </div>
@@ -178,6 +193,27 @@ export function AppShell({ initialView = "dashboard", initialProductionId = "", 
         {view === "funnel" && <EditableSections title="Oferta y embudo" sections={offer} setSections={setOffer} flash={flash} />}
       </section>
     </main>
+  );
+}
+
+function WorkspaceSelector() {
+  const { workspace, workspaces, setActiveWorkspace } = useWorkspace();
+  return (
+    <label className="mt-3 block text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+      Workspace
+      <select
+        className="focus-ring mt-2 min-h-10 w-full rounded-md border border-gold/25 bg-white/8 px-3 text-sm normal-case tracking-normal text-white transition hover:bg-white/10"
+        value={workspace.id}
+        onChange={(event) => setActiveWorkspace(event.target.value)}
+        aria-label="Seleccionar workspace"
+      >
+        {workspaces.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.id === workspace.id ? "✓ " : ""}{item.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

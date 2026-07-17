@@ -1,4 +1,5 @@
 import type { KnowledgeFileType } from "../documentTypes";
+import { loadActiveWorkspaceId, workspaceStorageKey } from "@/lib/workspaces";
 import { DEFAULT_CHUNK_OPTIONS } from "./chunkEngine";
 import type { ChunkOptions } from "./types";
 
@@ -12,7 +13,10 @@ const defaultForType = (fileType: KnowledgeFileType): ChunkOptions => ({
 export function loadChunkOptions(documentId: string, fileType: KnowledgeFileType): ChunkOptions {
   if (typeof window === "undefined") return defaultForType(fileType);
   try {
-    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, ChunkOptions>;
+    const scopedKey = workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY);
+    const raw = window.localStorage.getItem(scopedKey) ?? window.localStorage.getItem(STORAGE_KEY) ?? "{}";
+    if (raw !== "{}" && !window.localStorage.getItem(scopedKey)) window.localStorage.setItem(scopedKey, raw);
+    const stored = JSON.parse(raw) as Record<string, ChunkOptions>;
     return stored[documentId] ?? defaultForType(fileType);
   } catch {
     return defaultForType(fileType);
@@ -22,8 +26,9 @@ export function loadChunkOptions(documentId: string, fileType: KnowledgeFileType
 export function saveChunkOptions(documentId: string, options: ChunkOptions): void {
   if (typeof window === "undefined") return;
   try {
-    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, ChunkOptions>;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...stored, [documentId]: options }));
+    const scopedKey = workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY);
+    const stored = JSON.parse(window.localStorage.getItem(scopedKey) ?? "{}") as Record<string, ChunkOptions>;
+    window.localStorage.setItem(scopedKey, JSON.stringify({ ...stored, [documentId]: options }));
   } catch {
     // Chunk options are non-critical and can be regenerated from defaults.
   }

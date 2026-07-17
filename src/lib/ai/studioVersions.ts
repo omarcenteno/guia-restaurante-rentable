@@ -1,6 +1,7 @@
 "use client";
 
 import { loadLocal, saveLocal } from "@/lib/storage";
+import { loadActiveWorkspaceId, loadWorkspaceLocal, saveWorkspaceLocal, workspaceStorageKey } from "@/lib/workspaces";
 import type { ImagePromptRecord } from "@/lib/images";
 import type { AIGenerationMeta, AIProvider, GeneratedPublicationPayload, GenerationType } from "./types";
 
@@ -78,15 +79,16 @@ function normalizeVersions(versions: StudioGenerationVersion[]): StudioGeneratio
 }
 
 export function loadStudioVersions(publicationId: string): StudioGenerationVersion[] {
-  return clone(normalizeVersions(loadLocal<StudioGenerationVersion[]>(versionStorageKey(publicationId), [])));
+  return clone(normalizeVersions(loadWorkspaceLocal({ id: loadActiveWorkspaceId() }, versionStorageKey(publicationId), [])));
 }
 
 export function loadAllStudioVersions(): StudioGenerationVersion[] {
   if (typeof window === "undefined") return [];
   const versions: StudioGenerationVersion[] = [];
+  const scopedPrefix = workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY);
   for (let index = 0; index < window.localStorage.length; index += 1) {
     const key = window.localStorage.key(index);
-    if (!key?.startsWith(`${STORAGE_KEY}:`)) continue;
+    if (!key?.startsWith(`${scopedPrefix}:`) && !key?.startsWith(`${STORAGE_KEY}:`)) continue;
     try {
       const stored = JSON.parse(window.localStorage.getItem(key) || "[]") as StudioGenerationVersion[];
       if (Array.isArray(stored)) versions.push(...normalizeVersions(stored));
@@ -98,7 +100,7 @@ export function loadAllStudioVersions(): StudioGenerationVersion[] {
 }
 
 export function saveStudioVersions(publicationId: string, versions: StudioGenerationVersion[]): void {
-  saveLocal(versionStorageKey(publicationId), clone(versions));
+  saveWorkspaceLocal({ id: loadActiveWorkspaceId() }, versionStorageKey(publicationId), clone(versions));
 }
 
 export function nextStudioVersionNumber(versions: readonly StudioGenerationVersion[]): number {

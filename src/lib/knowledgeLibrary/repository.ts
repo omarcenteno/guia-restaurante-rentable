@@ -1,5 +1,6 @@
 import { knowledgeIndex } from "@/lib/knowledge/knowledgeIndex";
 import type { ChunkStrategyName } from "@/lib/knowledge/chunking";
+import { loadActiveWorkspaceId, workspaceStorageKey } from "@/lib/workspaces";
 import { initialKnowledgeDocuments } from "./mockDocuments";
 import type { KnowledgeDocument, KnowledgeDocumentDraft, ParsedKnowledgeFile, RetrievalDocument } from "./types";
 
@@ -44,7 +45,9 @@ export function loadKnowledgeDocuments(): KnowledgeDocument[] {
   if (typeof window === "undefined") return cloneInitialDocuments();
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const scopedKey = workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY);
+    const raw = window.localStorage.getItem(scopedKey) ?? window.localStorage.getItem(STORAGE_KEY);
+    if (raw && !window.localStorage.getItem(scopedKey)) window.localStorage.setItem(scopedKey, raw);
     if (!raw) return cloneInitialDocuments();
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) && parsed.every(isKnowledgeDocument) ? parsed.map(normalizeDocument) : cloneInitialDocuments();
@@ -56,7 +59,7 @@ export function loadKnowledgeDocuments(): KnowledgeDocument[] {
 export function saveKnowledgeDocuments(documents: KnowledgeDocument[]): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
+    window.localStorage.setItem(workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY), JSON.stringify(documents));
   } catch {
     // The original file remains in IndexedDB even if browser metadata storage is full.
   }

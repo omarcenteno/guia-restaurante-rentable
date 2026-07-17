@@ -1,0 +1,16 @@
+{
+  "beforeReload": {
+    "heading": "Guía Restaurante Rentable",
+    "href": "http://localhost:3002/",
+    "selectorText": "✓ Guía Restaurante Rentable",
+    "selectorValue": "grr"
+  },
+  "afterReload": {
+    "heading": "Guía Restaurante Rentable",
+    "href": "http://localhost:3002/",
+    "selectorText": "✓ Guía Restaurante Rentable",
+    "selectorValue": "grr"
+  },
+  "expectedActiveWorkspace": "grr",
+  "expectedWorkspaceName": "Guía Restaurante Rentable"
+}
