@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f7f4ee;
+  color: #11202f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(135deg, rgba(7, 20, 35, 0.045), transparent 28%),
+    #f7f4ee;
+  color: #11202f;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.thin-lines {
+  background-image:
+    linear-gradient(rgba(200, 164, 93, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 164, 93, 0.14) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(17, 32, 47, 0.24) transparent;
+}
+
+.focus-ring:focus {
+  outline: 2px solid #c8a45d;
+  outline-offset: 2px;
+}
