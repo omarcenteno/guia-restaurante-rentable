@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { EmbeddingGenerationSummary, KnowledgeDocument } from "@/lib/knowledge";
+import { useWorkspace } from "@/lib/workspaces";
 
 type VectorSearchResult = {
   chunk: {
@@ -56,6 +57,7 @@ const statusLabels: Record<EmbeddingGenerationSummary["status"], string> = {
 };
 
 export function EmbeddingDiagnosticsPanel({ documents, selectedDocument, flash }: EmbeddingDiagnosticsPanelProps) {
+  const { workspace } = useWorkspace();
   const [summary, setSummary] = useState<EmbeddingGenerationSummary>(initialSummary);
   const [runningAction, setRunningAction] = useState<EmbeddingAction | null>(null);
   const [query, setQuery] = useState("food cost");
@@ -77,6 +79,7 @@ export function EmbeddingDiagnosticsPanel({ documents, selectedDocument, flash }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action,
+          workspaceId: workspace.id,
           documents: payloadDocuments,
           documentId: selectedDocument?.id,
           query,
@@ -106,7 +109,7 @@ export function EmbeddingDiagnosticsPanel({ documents, selectedDocument, flash }
   useEffect(() => {
     void runAction("diagnostics");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documents.length]);
+  }, [documents.length, workspace.id]);
 
   return (
     <section className="rounded-md border border-ink/10 bg-white p-5 shadow-sm" aria-labelledby="embedding-diagnostics-title">

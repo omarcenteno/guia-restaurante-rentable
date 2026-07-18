@@ -18,11 +18,11 @@ import type { Publication } from "@/lib/ai/types";
 import { buildImagePrompts, type ImageContentType, type ImageTemplateName } from "@/lib/images";
 import { initialBrandBookSections } from "@/lib/brandBookData";
 import { checklistLabels, initialProductionItems, productionKanbanColumns, productionStates } from "@/lib/productionData";
-import { downloadBlob, downloadCsv, downloadFile, loadLocal, saveLocal } from "@/lib/storage";
+import { downloadBlob, downloadCsv, downloadFile } from "@/lib/storage";
 import { createStudioDocx } from "@/lib/studioDocx";
 import { formats, funnels, goals, initialBrandSections, initialContent, initialHooks, initialOffer, initialTemplates, pillars, series, statuses } from "@/lib/knowledge";
 import type { BrandBookSection, BrandSection, ContentItem, ContentProductionItem, Format, FunnelOffer, HookItem, ProductionState, ScriptTemplate, ViewId } from "@/lib/types";
-import { loadWorkspaceLocal, saveWorkspaceLocal, useWorkspace, WorkspaceProvider } from "@/lib/workspaces";
+import { loadWorkspaceLocal, saveWorkspaceLocal, StorageNamespace, useWorkspace, WorkspaceProvider } from "@/lib/workspaces";
 
 const contentKey = "grr-content";
 const hooksKey = "grr-hooks";
@@ -116,26 +116,27 @@ function AppShellContent({ initialView = "dashboard", initialProductionId = "", 
     const hashView = window.location.hash.replace("#", "");
     if (hashView === "brand-book") setView("brandBook");
     if (window.location.pathname === "/produccion") setView("production");
-    setContent(loadWorkspaceLocal(workspace, contentKey, initialContent));
-    setHooks(loadWorkspaceLocal(workspace, hooksKey, initialHooks));
-    setTemplates(loadWorkspaceLocal(workspace, templatesKey, initialTemplates));
-    setBrand(loadWorkspaceLocal(workspace, brandKey, initialBrandSections));
-    setBrandBook(loadWorkspaceLocal(workspace, brandBookKey, initialBrandBookSections));
-    setProduction(loadWorkspaceLocal(workspace, productionKey, initialProductionItems));
-    setOffer(loadWorkspaceLocal(workspace, offerKey, initialOffer));
+    const isDefaultWorkspace = workspace.id === "grr";
+    setContent(loadWorkspaceLocal(workspace, StorageNamespace.calendar(workspace.id, "content"), isDefaultWorkspace ? initialContent : [], isDefaultWorkspace ? [contentKey] : []));
+    setHooks(loadWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "hooks"), isDefaultWorkspace ? initialHooks : [], isDefaultWorkspace ? [hooksKey] : []));
+    setTemplates(loadWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "templates"), isDefaultWorkspace ? initialTemplates : [], isDefaultWorkspace ? [templatesKey] : []));
+    setBrand(loadWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "brand"), isDefaultWorkspace ? initialBrandSections : [], isDefaultWorkspace ? [brandKey] : []));
+    setBrandBook(loadWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "brand-book"), isDefaultWorkspace ? initialBrandBookSections : [], isDefaultWorkspace ? [brandBookKey] : []));
+    setProduction(loadWorkspaceLocal(workspace, StorageNamespace.production(workspace.id, "items"), isDefaultWorkspace ? initialProductionItems : [], isDefaultWorkspace ? [productionKey] : []));
+    setOffer(loadWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "offer"), isDefaultWorkspace ? initialOffer : [], isDefaultWorkspace ? [offerKey] : []));
     setLoadedWorkspaceId(workspace.id);
     setHydrated(true);
   }, [workspace]);
 
   const workspaceReady = hydrated && loadedWorkspaceId === workspace.id;
 
-  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, contentKey, content); }, [content, workspace, workspaceReady]);
-  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, hooksKey, hooks); }, [hooks, workspace, workspaceReady]);
-  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, templatesKey, templates); }, [templates, workspace, workspaceReady]);
-  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, brandKey, brand); }, [brand, workspace, workspaceReady]);
-  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, brandBookKey, brandBook); }, [brandBook, workspace, workspaceReady]);
-  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, productionKey, production); }, [production, workspace, workspaceReady]);
-  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, offerKey, offer); }, [offer, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, StorageNamespace.calendar(workspace.id, "content"), content); }, [content, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "hooks"), hooks); }, [hooks, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "templates"), templates); }, [templates, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "brand"), brand); }, [brand, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "brand-book"), brandBook); }, [brandBook, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, StorageNamespace.production(workspace.id, "items"), production); }, [production, workspace, workspaceReady]);
+  useEffect(() => { if (workspaceReady) saveWorkspaceLocal(workspace, StorageNamespace.setting(workspace.id, "offer"), offer); }, [offer, workspace, workspaceReady]);
 
   const flash = (message: string) => {
     setToast(message);
@@ -508,6 +509,7 @@ function ProductionModule({
   flash: (message: string) => void;
 }) {
   const router = useRouter();
+  const { workspace } = useWorkspace();
   const [mode, setMode] = useState<"kanban" | "list" | "studio">(initialProductionId ? "studio" : initialProductionMode);
   const [selectedId, setSelectedId] = useState(resolveProductionId(initialProductionId, production) || nextProductionItem(production)?.id || production[0]?.id || "");
   const [query, setQuery] = useState("");
@@ -537,7 +539,7 @@ function ProductionModule({
   const updateItem = (updated: ContentProductionItem, message = "Producción guardada.") => {
     const next = normalizeProductionItem(updated);
     const nextCollection = allProduction.map((item) => (item.id === next.id ? next : item));
-    saveLocal(productionKey, nextCollection);
+    saveWorkspaceLocal(workspace, StorageNamespace.production(workspace.id, "items"), nextCollection);
     setProduction((current) => current.map((item) => (item.id === next.id ? next : item)));
     if (isPublishedState(next.estado)) syncPublishedToContent(next, content, setContent);
     if (message) flash(message);
@@ -808,6 +810,7 @@ function ProductionStudio({
   onPublish: (item: ContentProductionItem) => void;
   onMetrics: (item: ContentProductionItem) => void;
 }) {
+  const { workspace } = useWorkspace();
   const [draft, setDraft] = useState(item);
   const [focusMode, setFocusMode] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -855,7 +858,7 @@ function ProductionStudio({
   const generationContext = useMemo(() => getPublicationGenerationContext(aiPublication), [aiPublication]);
   const activeVersion = versions.find((version) => version.id === activeVersionId) ?? null;
   const calc = productionMetricCalculations(draft);
-  const historyKey = `grr-production-history-${draft.id}`;
+  const historyKey = StorageNamespace.productionHistory(workspace.id, draft.id);
   const checklistItems = [
     { id: "hook", label: "Hook", done: Boolean(draft.hook.trim()) },
     { id: "copy", label: "Copy", done: Boolean(draft.copy.trim()) },
@@ -880,26 +883,26 @@ function ProductionStudio({
     lastSavedRef.current = JSON.stringify(item);
     setLastSavedAt(new Date());
     setSaveStatus("Último guardado hace unos segundos");
-    setHistory(loadLocal<HistoryEntry[]>(`grr-production-history-${item.id}`, []));
-  }, [item]);
+    setHistory(loadWorkspaceLocal(workspace, StorageNamespace.productionHistory(workspace.id, item.id), [], [`grr-production-history-${item.id}`]));
+  }, [item, workspace]);
 
   useEffect(() => {
-    const storedVersions = loadStudioVersions(item.id);
+    const storedVersions = loadStudioVersions(item.id, workspace.id);
     const hydratedVersions = storedVersions.map((version) => {
       if (version.visualPrompts.length) return version;
       const visualPrompts = promptsForVersion(version, item.objetivo);
       const primaryPrompt = visualPrompts.find((prompt) => prompt.provider === "gpt-image")?.prompt ?? version.content.imagePrompt;
       return { ...version, visualPrompts, content: { ...version.content, imagePrompt: primaryPrompt } };
     });
-    if (hydratedVersions.some((version, index) => version !== storedVersions[index])) saveStudioVersions(item.id, hydratedVersions);
+    if (hydratedVersions.some((version, index) => version !== storedVersions[index])) saveStudioVersions(item.id, hydratedVersions, workspace.id);
     setVersions(hydratedVersions);
-    setAllStudioVersions(loadAllStudioVersions());
+    setAllStudioVersions(loadAllStudioVersions(workspace.id));
     setActiveVersionId(hydratedVersions[0]?.id ?? null);
     setHasGenerated(hydratedVersions.length > 0);
     setComparison(null);
     setVersionMessage("");
     return cancelPublicationGeneration;
-  }, [item.id]);
+  }, [item.id, item.objetivo, workspace.id]);
 
   useEffect(() => () => {
     if (studioActionTimerRef.current) window.clearTimeout(studioActionTimerRef.current);
@@ -907,15 +910,15 @@ function ProductionStudio({
 
   const recordHistory = (summary: string) => {
     const entry: HistoryEntry = { id: `${Date.now()}-${Math.random()}`, savedAt: new Date().toISOString(), summary };
-    const next = [entry, ...loadLocal<HistoryEntry[]>(historyKey, history)].slice(0, 50);
-    saveLocal(historyKey, next);
+    const next = [entry, ...loadWorkspaceLocal(workspace, historyKey, history)].slice(0, 50);
+    saveWorkspaceLocal(workspace, historyKey, next);
     setHistory(next);
   };
 
   const persistVersions = (nextVersions: StudioGenerationVersion[]) => {
     setVersions(nextVersions);
-    saveStudioVersions(item.id, nextVersions);
-    setAllStudioVersions(loadAllStudioVersions());
+    saveStudioVersions(item.id, nextVersions, workspace.id);
+    setAllStudioVersions(loadAllStudioVersions(workspace.id));
   };
 
   const showStudioAction = (label: string, duration = 900) => {
@@ -1096,7 +1099,7 @@ function ProductionStudio({
     if (process.env.NODE_ENV === "development") console.info("[GRR AI][studio] Generación iniciada", { publicationId: draft.id, regenerating });
     try {
       const generated = await generatePublication(draft.id, aiPublication, { regenerate: regenerating });
-      const baseVersion = createStudioVersion({ publicationId: draft.id, versionNumber: nextStudioVersionNumber(versions), type: generated.type, topic: draft.tema, generated: generated.generated, meta: generated.meta, user: loadLocal<string | undefined>("grr-current-user", undefined) });
+      const baseVersion = createStudioVersion({ publicationId: draft.id, versionNumber: nextStudioVersionNumber(versions), type: generated.type, topic: draft.tema, generated: generated.generated, meta: generated.meta, user: loadWorkspaceLocal<string | undefined>(workspace, StorageNamespace.preference(workspace.id, "current-user"), undefined, ["grr-current-user"]) });
       const visualPrompts = promptsForVersion(baseVersion, draft.objetivo);
       const primaryPrompt = visualPrompts.find((prompt) => prompt.provider === "gpt-image")?.prompt ?? baseVersion.content.imagePrompt;
       const version: StudioGenerationVersion = { ...baseVersion, visualPrompts, content: { ...baseVersion.content, imagePrompt: primaryPrompt } };

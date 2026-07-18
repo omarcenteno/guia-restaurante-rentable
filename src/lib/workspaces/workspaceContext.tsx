@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { migrateWorkspaceData } from "./migration";
 import { loadOrganization, loadWorkspaces, saveOrganization, saveWorkspaces } from "./repository";
 import { loadActiveWorkspaceId, saveActiveWorkspaceId } from "./storage";
 import type { WorkspaceContextValue } from "./types";
@@ -18,6 +19,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const storedWorkspaces = loadWorkspaces();
     const storedOrganization = loadOrganization();
     const storedActiveId = loadActiveWorkspaceId();
+    migrateWorkspaceData(storedActiveId);
     setWorkspaces(storedWorkspaces);
     setOrganization(storedOrganization);
     setActiveWorkspaceId(storedWorkspaces.some((workspace) => workspace.id === storedActiveId) ? storedActiveId : defaultWorkspace.id);
@@ -26,6 +28,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
+    migrateWorkspaceData(activeWorkspaceId);
     saveWorkspaces(workspaces);
     saveOrganization(organization);
     saveActiveWorkspaceId(activeWorkspaceId);

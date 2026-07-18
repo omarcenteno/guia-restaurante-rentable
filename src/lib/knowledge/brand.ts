@@ -1,5 +1,6 @@
 import { initialBrandBookSections } from "@/lib/brandBookData";
-import { loadLocal } from "@/lib/storage";
+import { loadActiveWorkspaceId, loadWorkspaceLocal, StorageNamespace } from "@/lib/workspaces";
+import { defaultWorkspace } from "@/lib/workspaces/workspaceDefaults";
 import type { BrandBookSection, BrandSection } from "@/lib/types";
 import type { AudienceKnowledge, BrandKnowledge } from "./types";
 
@@ -23,7 +24,8 @@ export const initialBrandSections: BrandSection[] = [
 ];
 
 export function getBrandBookSections() {
-  return loadLocal<BrandBookSection[]>("grr-brand-book", initialBrandBookSections);
+  const workspaceId = loadActiveWorkspaceId();
+  return loadWorkspaceLocal<BrandBookSection[]>({ id: workspaceId }, StorageNamespace.setting(workspaceId, "brand-book"), workspaceId === defaultWorkspace.id ? initialBrandBookSections : [], workspaceId === defaultWorkspace.id ? ["grr-brand-book"] : []);
 }
 
 export function getSectionBody(title: string) {
@@ -47,7 +49,8 @@ export function getBrand(): BrandKnowledge {
 }
 
 export function getAudience(): AudienceKnowledge {
-  const legacy = loadLocal<BrandSection[]>("grr-brand", initialBrandSections);
+  const workspaceId = loadActiveWorkspaceId();
+  const legacy = loadWorkspaceLocal<BrandSection[]>({ id: workspaceId }, StorageNamespace.setting(workspaceId, "brand"), workspaceId === defaultWorkspace.id ? initialBrandSections : [], workspaceId === defaultWorkspace.id ? ["grr-brand"] : []);
   const find = (id: string) => legacy.find((entry) => entry.id === id)?.body ?? "";
   const avatar = getSectionBody("Avatar Principal");
   return { profile: getSectionBody("Público Objetivo"), problems: splitList(find("problems")), desires: parseList(sectionBlock(avatar, "Deseos", "Miedos")).concat(splitList(find("desires"))), objections: splitList(find("objections")), pains: parseList(sectionBlock(avatar, "Miedos")), transformation: getSectionBody("Propuesta de Valor") };

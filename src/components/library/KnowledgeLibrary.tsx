@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { deleteKnowledgeFile, duplicateKnowledgeFile, getKnowledgeFile, parseKnowledgeFile, saveKnowledgeFile } from "@/lib/knowledge";
+import { useWorkspace } from "@/lib/workspaces";
 import {
   createKnowledgeDocumentFromFile,
   duplicateKnowledgeDocument,
@@ -27,6 +28,7 @@ interface KnowledgeLibraryProps {
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
+  const { workspace } = useWorkspace();
   const [documents, setDocuments] = useState<KnowledgeDocument[]>(initialKnowledgeDocuments);
   const [selectedId, setSelectedId] = useState(initialKnowledgeDocuments[0]?.id ?? "");
   const [query, setQuery] = useState("");
@@ -36,21 +38,27 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
   const [sort, setSort] = useState<KnowledgeSort>("Más recientes");
   const [uploading, setUploading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState("");
 
   useEffect(() => {
-    const stored = loadKnowledgeDocuments();
+    setHydrated(false);
+    const stored = loadKnowledgeDocuments(workspace.id);
     setDocuments(stored);
     setSelectedId(stored[0]?.id ?? "");
+    setLoadedWorkspaceId(workspace.id);
     setHydrated(true);
-  }, []);
+  }, [workspace.id]);
+
+  const workspaceReady = hydrated && loadedWorkspaceId === workspace.id;
+  const scopedDocuments = workspaceReady ? documents : [];
 
   useEffect(() => {
-    if (hydrated) saveKnowledgeDocuments(documents);
-  }, [documents, hydrated]);
+    if (workspaceReady) saveKnowledgeDocuments(documents, workspace.id);
+  }, [documents, workspace.id, workspaceReady]);
 
   const filteredDocuments = useMemo(() => {
     const normalizedQuery = normalize(query);
-    const filtered = documents.filter((document) => {
+    const filtered = scopedDocuments.filter((document) => {
       const searchText = normalize([document.title, document.description, document.category, document.author, document.metadata.fileName, document.metadata.fileType, ...document.tags].join(" "));
       return (!normalizedQuery || searchText.includes(normalizedQuery))
         && (category === "Todas" || document.category === category)
@@ -63,12 +71,12 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
       if (sort === "Título A-Z") return a.title.localeCompare(b.title, "es");
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [category, documents, favoritesOnly, query, sort, status]);
+  }, [category, favoritesOnly, query, scopedDocuments, sort, status]);
 
-  const selectedDocument = documents.find((document) => document.id === selectedId) ?? null;
-  const publishedCount = documents.filter((document) => document.status === "Publicado").length;
-  const favoriteCount = documents.filter((document) => document.favorite).length;
-  const categoryCount = new Set(documents.map((document) => document.category)).size;
+  const selectedDocument = scopedDocuments.find((document) => document.id === selectedId) ?? null;
+  const publishedCount = scopedDocuments.filter((document) => document.status === "Publicado").length;
+  const favoriteCount = scopedDocuments.filter((document) => document.favorite).length;
+  const categoryCount = new Set(scopedDocuments.map((document) => document.category)).size;
 
   const selectDocument = (id: string) => {
     setSelectedId(id);
@@ -88,7 +96,7 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
     if (!selectedDocument) return;
     try {
       const duplicate = duplicateKnowledgeDocument(selectedDocument);
-      await duplicateKnowledgeFile(selectedDocument.id, duplicate.id);
+      await duplicateKnowledgeFile(selectedDocument.id, duplicate.id, workspace.id);
       setDocuments((current) => [duplicate, ...current]);
       setSelectedId(duplicate.id);
       flash("Documento duplicado como borrador.");
@@ -104,7 +112,7 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
 
   const deleteSelected = async () => {
     try {
-      await deleteKnowledgeFile(selectedId);
+      await deleteKnowledgeFile(selectedId, workspace.id);
       const remaining = documents.filter((document) => document.id !== selectedId);
       setDocuments(remaining);
       setSelectedId(remaining[0]?.id ?? "");
@@ -117,7 +125,7 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
   const downloadSelected = async () => {
     if (!selectedDocument) return;
     try {
-      const storedFile = await getKnowledgeFile(selectedDocument.id);
+      const storedFile = await getKnowledgeFile(selectedDocument.id, workspace.id);
       const blob = storedFile ?? new Blob([selectedDocument.content], { type: selectedDocument.metadata.mimeType });
       downloadBlob(selectedDocument.metadata.fileName, blob);
       flash("Descarga preparada.");
@@ -137,7 +145,7 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
     try {
       const parsed = await parseKnowledgeFile(file);
       const document = createKnowledgeDocumentFromFile(file, parsed);
-      await saveKnowledgeFile(document.id, file);
+      await saveKnowledgeFile(document.id, file, workspace.id);
       setDocuments((current) => [document, ...current]);
       setSelectedId(document.id);
       clearFilters();
@@ -173,7 +181,7 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">Conocimiento operativo de Guía Restaurante Rentable, organizado para consulta y preparado como contexto futuro.</p>
           </div>
           <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm sm:grid-cols-4">
-            <Metric label="Documentos" value={documents.length} />
+            <Metric label="Documentos" value={scopedDocuments.length} />
             <Metric label="Publicados" value={publishedCount} />
             <Metric label="Favoritos" value={favoriteCount} />
             <Metric label="Categorías" value={categoryCount} />
@@ -183,7 +191,7 @@ export function KnowledgeLibrary({ flash }: KnowledgeLibraryProps) {
 
       <UploadDocumentPanel uploading={uploading} onUpload={uploadDocument} />
 
-      <EmbeddingDiagnosticsPanel documents={documents} selectedDocument={selectedDocument} flash={flash} />
+      <EmbeddingDiagnosticsPanel documents={scopedDocuments} selectedDocument={selectedDocument} flash={flash} />
 
       <LibraryFilters
         query={query}

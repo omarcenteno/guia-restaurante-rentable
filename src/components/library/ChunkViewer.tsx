@@ -8,6 +8,7 @@ import {
   type ChunkStrategyName
 } from "@/lib/knowledge/chunking";
 import type { KnowledgeDocument } from "@/lib/knowledgeLibrary";
+import { useWorkspace } from "@/lib/workspaces";
 
 const strategyLabels: Record<ChunkStrategyName, string> = {
   fixed: "Fixed",
@@ -16,25 +17,26 @@ const strategyLabels: Record<ChunkStrategyName, string> = {
 };
 
 export function ChunkViewer({ document, onClose }: { document: KnowledgeDocument; onClose: () => void }) {
-  const initialOptions = loadChunkOptions(document.id, document.metadata.fileType);
+  const { workspace } = useWorkspace();
+  const initialOptions = loadChunkOptions(document.id, document.metadata.fileType, workspace.id);
   const [options, setOptions] = useState<ChunkOptions>(initialOptions);
   const [result, setResult] = useState<ChunkResult>(() => chunkDocument(document, initialOptions));
   const [expandedId, setExpandedId] = useState(result.chunks[0]?.id ?? "");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    const nextOptions = loadChunkOptions(document.id, document.metadata.fileType);
+    const nextOptions = loadChunkOptions(document.id, document.metadata.fileType, workspace.id);
     const nextResult = chunkDocument(document, nextOptions);
     setOptions(nextOptions);
     setResult(nextResult);
     setExpandedId(nextResult.chunks[0]?.id ?? "");
-  }, [document]);
+  }, [document, workspace.id]);
 
   const regenerate = () => {
     const nextResult = chunkDocument(document, options);
     setResult(nextResult);
     setExpandedId(nextResult.chunks[0]?.id ?? "");
-    saveChunkOptions(document.id, options);
+    saveChunkOptions(document.id, options, workspace.id);
     setNotice("Chunks regenerados.");
     window.setTimeout(() => setNotice(""), 1800);
   };

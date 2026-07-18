@@ -1,4 +1,5 @@
-import { loadLocal } from "@/lib/storage";
+import { loadActiveWorkspaceId, loadWorkspaceLocal, StorageNamespace } from "@/lib/workspaces";
+import { defaultWorkspace } from "@/lib/workspaces/workspaceDefaults";
 import type { FunnelOffer } from "@/lib/types";
 import { getSectionBody, valueAfterLabel } from "./brand";
 import type { OfferKnowledge } from "./types";
@@ -15,7 +16,8 @@ export const initialOffer: FunnelOffer[] = [
 ];
 
 export function getOffer(): OfferKnowledge {
-  const stored = loadLocal<FunnelOffer[]>("grr-offer", initialOffer);
+  const workspaceId = loadActiveWorkspaceId();
+  const stored = loadWorkspaceLocal<FunnelOffer[]>({ id: workspaceId }, StorageNamespace.setting(workspaceId, "offer"), workspaceId === defaultWorkspace.id ? initialOffer : [], workspaceId === defaultWorkspace.id ? ["grr-offer"] : []);
   const find = (id: string) => stored.find((entry) => entry.id === id)?.body ?? "";
   const offer = getSectionBody("Oferta");
   return { mainProduct: valueAfterLabel(offer, "Producto") || find("product"), price: valueAfterLabel(offer, "Precio") || "$47 USD", guarantee: valueAfterLabel(offer, "Garantía") || "7 días", benefits: find("benefits").split(",").map((value) => value.trim()).filter(Boolean), promise: getSectionBody("Propuesta de Valor") };

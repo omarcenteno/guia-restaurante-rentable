@@ -1,7 +1,6 @@
 "use client";
 
-import { loadLocal, saveLocal } from "@/lib/storage";
-import { loadActiveWorkspaceId, loadWorkspaceLocal, saveWorkspaceLocal, workspaceStorageKey } from "@/lib/workspaces";
+import { loadActiveWorkspaceId, loadWorkspaceLocal, saveWorkspaceLocal, StorageNamespace } from "@/lib/workspaces";
 import type { ImagePromptRecord } from "@/lib/images";
 import type { AIGenerationMeta, AIProvider, GeneratedPublicationPayload, GenerationType } from "./types";
 
@@ -47,8 +46,8 @@ function createVersionId(): string {
   return `version-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function versionStorageKey(publicationId: string): string {
-  return `${STORAGE_KEY}:${publicationId}`;
+function versionStorageKey(publicationId: string, workspaceId = loadActiveWorkspaceId()): string {
+  return StorageNamespace.version(workspaceId, publicationId);
 }
 
 function inferProvider(model: string): AIProvider {
@@ -78,17 +77,18 @@ function normalizeVersions(versions: StudioGenerationVersion[]): StudioGeneratio
   }).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
-export function loadStudioVersions(publicationId: string): StudioGenerationVersion[] {
-  return clone(normalizeVersions(loadWorkspaceLocal({ id: loadActiveWorkspaceId() }, versionStorageKey(publicationId), [])));
+export function loadStudioVersions(publicationId: string, workspaceId = loadActiveWorkspaceId()): StudioGenerationVersion[] {
+  return clone(normalizeVersions(loadWorkspaceLocal({ id: workspaceId }, versionStorageKey(publicationId, workspaceId), [], [`${STORAGE_KEY}:${publicationId}`])));
 }
 
-export function loadAllStudioVersions(): StudioGenerationVersion[] {
+export function loadAllStudioVersions(workspaceId = loadActiveWorkspaceId()): StudioGenerationVersion[] {
   if (typeof window === "undefined") return [];
   const versions: StudioGenerationVersion[] = [];
-  const scopedPrefix = workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY);
+  const scopedPrefix = `${StorageNamespace.versionsRoot(workspaceId)}/`;
+  const previousScopedPrefix = `grr-workspace:${workspaceId}:${STORAGE_KEY}:`;
   for (let index = 0; index < window.localStorage.length; index += 1) {
     const key = window.localStorage.key(index);
-    if (!key?.startsWith(`${scopedPrefix}:`) && !key?.startsWith(`${STORAGE_KEY}:`)) continue;
+    if (!key?.startsWith(scopedPrefix) && !key?.startsWith(previousScopedPrefix) && !key?.startsWith(`${STORAGE_KEY}:`)) continue;
     try {
       const stored = JSON.parse(window.localStorage.getItem(key) || "[]") as StudioGenerationVersion[];
       if (Array.isArray(stored)) versions.push(...normalizeVersions(stored));
@@ -99,8 +99,8 @@ export function loadAllStudioVersions(): StudioGenerationVersion[] {
   return clone(versions.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
 }
 
-export function saveStudioVersions(publicationId: string, versions: StudioGenerationVersion[]): void {
-  saveWorkspaceLocal({ id: loadActiveWorkspaceId() }, versionStorageKey(publicationId), clone(versions));
+export function saveStudioVersions(publicationId: string, versions: StudioGenerationVersion[], workspaceId = loadActiveWorkspaceId()): void {
+  saveWorkspaceLocal({ id: workspaceId }, versionStorageKey(publicationId, workspaceId), clone(versions));
 }
 
 export function nextStudioVersionNumber(versions: readonly StudioGenerationVersion[]): number {

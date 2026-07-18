@@ -26,11 +26,11 @@ const runRequest = <T>(request: IDBRequest<T>): Promise<T> => new Promise((resol
   request.onerror = () => reject(request.error ?? new Error("No fue posible completar la operación del archivo"));
 });
 
-const scopedDocumentId = (documentId: string) => `${loadActiveWorkspaceId()}:${documentId}`;
+const scopedDocumentId = (documentId: string, workspaceId = loadActiveWorkspaceId()) => `${workspaceId}:${documentId}`;
 
-export async function saveKnowledgeFile(documentId: string, file: File): Promise<void> {
+export async function saveKnowledgeFile(documentId: string, file: File, workspaceId = loadActiveWorkspaceId()): Promise<void> {
   const database = await openDatabase();
-  const scopedId = scopedDocumentId(documentId);
+  const scopedId = scopedDocumentId(documentId, workspaceId);
   try {
     const transaction = database.transaction(STORE_NAME, "readwrite");
     await runRequest(transaction.objectStore(STORE_NAME).put({
@@ -45,9 +45,9 @@ export async function saveKnowledgeFile(documentId: string, file: File): Promise
   }
 }
 
-export async function getKnowledgeFile(documentId: string): Promise<Blob | null> {
+export async function getKnowledgeFile(documentId: string, workspaceId = loadActiveWorkspaceId()): Promise<Blob | null> {
   const database = await openDatabase();
-  const scopedId = scopedDocumentId(documentId);
+  const scopedId = scopedDocumentId(documentId, workspaceId);
   try {
     const store = database.transaction(STORE_NAME).objectStore(STORE_NAME);
     const record = await runRequest(store.get(scopedId)) as StoredKnowledgeFile | undefined;
@@ -60,9 +60,9 @@ export async function getKnowledgeFile(documentId: string): Promise<Blob | null>
   }
 }
 
-export async function deleteKnowledgeFile(documentId: string): Promise<void> {
+export async function deleteKnowledgeFile(documentId: string, workspaceId = loadActiveWorkspaceId()): Promise<void> {
   const database = await openDatabase();
-  const scopedId = scopedDocumentId(documentId);
+  const scopedId = scopedDocumentId(documentId, workspaceId);
   try {
     const store = database.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME);
     await runRequest(store.delete(scopedId));
@@ -72,10 +72,10 @@ export async function deleteKnowledgeFile(documentId: string): Promise<void> {
   }
 }
 
-export async function duplicateKnowledgeFile(sourceDocumentId: string, targetDocumentId: string): Promise<void> {
+export async function duplicateKnowledgeFile(sourceDocumentId: string, targetDocumentId: string, workspaceId = loadActiveWorkspaceId()): Promise<void> {
   const database = await openDatabase();
-  const scopedSourceId = scopedDocumentId(sourceDocumentId);
-  const scopedTargetId = scopedDocumentId(targetDocumentId);
+  const scopedSourceId = scopedDocumentId(sourceDocumentId, workspaceId);
+  const scopedTargetId = scopedDocumentId(targetDocumentId, workspaceId);
   try {
     const sourceStore = database.transaction(STORE_NAME).objectStore(STORE_NAME);
     const scopedSource = await runRequest(sourceStore.get(scopedSourceId)) as StoredKnowledgeFile | undefined;

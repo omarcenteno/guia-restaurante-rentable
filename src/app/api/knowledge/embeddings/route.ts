@@ -10,6 +10,7 @@ type EmbeddingAction = "diagnostics" | "generate" | "regenerate" | "delete" | "c
 
 interface EmbeddingApiRequest {
   action?: EmbeddingAction;
+  workspaceId?: string;
   documents?: KnowledgeDocument[];
   documentId?: string;
   query?: string;
@@ -52,7 +53,15 @@ function toPublicResults(results: Awaited<ReturnType<EmbeddingEngine["search"]>>
   }));
 }
 
-const engine = new EmbeddingEngine(new OpenAIEmbeddingProvider());
+const engines = new Map<string, EmbeddingEngine>();
+
+function getEngine(workspaceId: string): EmbeddingEngine {
+  const existing = engines.get(workspaceId);
+  if (existing) return existing;
+  const engine = new EmbeddingEngine(new OpenAIEmbeddingProvider());
+  engines.set(workspaceId, engine);
+  return engine;
+}
 
 function developmentInfo(message: string, details: Record<string, unknown>) {
   if (process.env.NODE_ENV === "development") console.info(`[GRR Knowledge][embeddings] ${message}`, details);
@@ -69,6 +78,7 @@ function parseRequest(value: unknown): Required<Pick<EmbeddingApiRequest, "actio
     : "diagnostics";
   return {
     action,
+    workspaceId: typeof value.workspaceId === "string" && value.workspaceId.trim() ? value.workspaceId.trim() : "grr",
     documents: Array.isArray(value.documents) ? value.documents as KnowledgeDocument[] : [],
     documentId: typeof value.documentId === "string" ? value.documentId : undefined,
     query: typeof value.query === "string" ? value.query : undefined,
@@ -81,6 +91,7 @@ function documentChunks(documents: KnowledgeDocument[]): number {
 }
 
 export async function GET() {
+  const engine = getEngine("grr");
   const response: EmbeddingApiResponse = {
     ok: true,
     summary: {
@@ -101,7 +112,8 @@ export async function POST(request: Request) {
 
   try {
     const body = parseRequest(await request.json().catch(() => null));
-    developmentInfo("Petición validada", { requestId, action: body.action, documents: body.documents.length, documentId: body.documentId });
+    const engine = getEngine(body.workspaceId ?? "grr");
+    developmentInfo("Petición validada", { requestId, action: body.action, workspaceId: body.workspaceId, documents: body.documents.length, documentId: body.documentId });
 
     if (body.action === "diagnostics") {
       const summary: EmbeddingGenerationSummary = {

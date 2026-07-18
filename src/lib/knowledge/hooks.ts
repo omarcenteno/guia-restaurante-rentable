@@ -1,4 +1,5 @@
-import { loadLocal } from "@/lib/storage";
+import { loadActiveWorkspaceId, loadWorkspaceLocal, StorageNamespace } from "@/lib/workspaces";
+import { defaultWorkspace } from "@/lib/workspaces/workspaceDefaults";
 import type { HookItem } from "@/lib/types";
 import { pillars } from "./brand";
 import { formats } from "./templates";
@@ -70,7 +71,8 @@ export const initialHooks: HookItem[] = hookTexts.map((text, index) => ({
 }));
 
 export function getHooks(): HooksKnowledge {
-  const hooks = loadLocal<HookItem[]>("grr-hooks", initialHooks);
+  const workspaceId = loadActiveWorkspaceId();
+  const hooks = loadWorkspaceLocal<HookItem[]>({ id: workspaceId }, StorageNamespace.setting(workspaceId, "hooks"), workspaceId === defaultWorkspace.id ? initialHooks : [], workspaceId === defaultWorkspace.id ? ["grr-hooks"] : []);
   const sorted = [...hooks].sort((a, b) => b.performance - a.performance || a.used - b.used);
   return { primary: sorted[0]?.text ?? initialHooks[0].text, all: sorted.map((hook) => hook.text) };
 }

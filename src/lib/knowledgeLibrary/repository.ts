@@ -1,6 +1,7 @@
 import { knowledgeIndex } from "@/lib/knowledge/knowledgeIndex";
 import type { ChunkStrategyName } from "@/lib/knowledge/chunking";
-import { loadActiveWorkspaceId, workspaceStorageKey } from "@/lib/workspaces";
+import { loadActiveWorkspaceId, StorageNamespace } from "@/lib/workspaces";
+import { defaultWorkspace } from "@/lib/workspaces/workspaceDefaults";
 import { initialKnowledgeDocuments } from "./mockDocuments";
 import type { KnowledgeDocument, KnowledgeDocumentDraft, ParsedKnowledgeFile, RetrievalDocument } from "./types";
 
@@ -41,25 +42,27 @@ const normalizeDocument = (document: KnowledgeDocument): KnowledgeDocument => ({
   retrieval: { ...document.retrieval }
 });
 
-export function loadKnowledgeDocuments(): KnowledgeDocument[] {
-  if (typeof window === "undefined") return cloneInitialDocuments();
+export function loadKnowledgeDocuments(workspaceId = loadActiveWorkspaceId()): KnowledgeDocument[] {
+  const fallback = workspaceId === defaultWorkspace.id ? cloneInitialDocuments() : [];
+  if (typeof window === "undefined") return fallback;
 
   try {
-    const scopedKey = workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY);
-    const raw = window.localStorage.getItem(scopedKey) ?? window.localStorage.getItem(STORAGE_KEY);
+    const scopedKey = StorageNamespace.knowledge(workspaceId, "library");
+    const previousScopedKey = StorageNamespace.legacyScopedKey(workspaceId, STORAGE_KEY);
+    const raw = window.localStorage.getItem(scopedKey) ?? window.localStorage.getItem(previousScopedKey) ?? (workspaceId === defaultWorkspace.id ? window.localStorage.getItem(STORAGE_KEY) : null);
     if (raw && !window.localStorage.getItem(scopedKey)) window.localStorage.setItem(scopedKey, raw);
-    if (!raw) return cloneInitialDocuments();
+    if (!raw) return fallback;
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.every(isKnowledgeDocument) ? parsed.map(normalizeDocument) : cloneInitialDocuments();
+    return Array.isArray(parsed) && parsed.every(isKnowledgeDocument) ? parsed.map(normalizeDocument) : fallback;
   } catch {
-    return cloneInitialDocuments();
+    return fallback;
   }
 }
 
-export function saveKnowledgeDocuments(documents: KnowledgeDocument[]): void {
+export function saveKnowledgeDocuments(documents: KnowledgeDocument[], workspaceId = loadActiveWorkspaceId()): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(workspaceStorageKey(loadActiveWorkspaceId(), STORAGE_KEY), JSON.stringify(documents));
+    window.localStorage.setItem(StorageNamespace.knowledge(workspaceId, "library"), JSON.stringify(documents));
   } catch {
     // The original file remains in IndexedDB even if browser metadata storage is full.
   }

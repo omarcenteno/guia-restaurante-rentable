@@ -26,7 +26,11 @@ export function saveOrganization(organization: Organization): void {
 export function loadWorkspaces(): Workspace[] {
   if (typeof window === "undefined") return defaultWorkspaces;
   const stored = safeParse<Workspace[]>(window.localStorage.getItem(WORKSPACES_KEY), defaultWorkspaces);
-  return stored.some((workspace) => workspace.id === defaultWorkspace.id) ? stored : [defaultWorkspace, ...stored];
+  const merged = [...stored];
+  defaultWorkspaces.forEach((workspace) => {
+    if (!merged.some((item) => item.id === workspace.id)) merged.push(workspace);
+  });
+  return merged.some((workspace) => workspace.id === defaultWorkspace.id) ? merged : [defaultWorkspace, ...merged];
 }
 
 export function saveWorkspaces(workspaces: Workspace[]): void {
