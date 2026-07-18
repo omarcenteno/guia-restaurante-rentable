@@ -1098,7 +1098,7 @@ function ProductionStudio({
     setIsGenerating(true);
     if (process.env.NODE_ENV === "development") console.info("[GRR AI][studio] Generación iniciada", { publicationId: draft.id, regenerating });
     try {
-      const generated = await generatePublication(draft.id, aiPublication, { regenerate: regenerating });
+      const generated = await generatePublication(draft.id, aiPublication, { regenerate: regenerating, workspaceId: workspace.id });
       const baseVersion = createStudioVersion({ publicationId: draft.id, versionNumber: nextStudioVersionNumber(versions), type: generated.type, topic: draft.tema, generated: generated.generated, meta: generated.meta, user: loadWorkspaceLocal<string | undefined>(workspace, StorageNamespace.preference(workspace.id, "current-user"), undefined, ["grr-current-user"]) });
       const visualPrompts = promptsForVersion(baseVersion, draft.objetivo);
       const primaryPrompt = visualPrompts.find((prompt) => prompt.provider === "gpt-image")?.prompt ?? baseVersion.content.imagePrompt;

@@ -3,11 +3,10 @@ import { AIError, AIResponseParseError, AIValidationError, normalizeAIError } fr
 import { createGenerationFallback } from "@/lib/ai/fallback";
 import { recordGeneration } from "@/lib/ai/generationHistory";
 import { buildContext } from "@/lib/ai/knowledgeProvider";
-import { buildPrompt } from "@/lib/ai/promptBuilder";
-import { getAIProvider } from "@/lib/ai/providerRegistry";
 import { parseGeneratedPublication, toGeneratedContent } from "@/lib/ai/responseParser";
 import { estimateTokenUsage } from "@/lib/ai/tokenCounter";
 import type { AIProvider, AIGenerationApiRequest, AIGenerationApiResponse, ContentLength, GeneratedPublicationPayload, GenerationRequest, GenerationType, Publication, TokenUsage } from "@/lib/ai/types";
+import { RagGenerationPipelineError, runRagGenerationPipeline } from "@/lib/rag/generation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +79,7 @@ function parseApiRequest(value: unknown): GenerationRequest {
 
   return {
     type: value.type as GenerationType,
+    workspaceId: optionalString(value.workspaceId, "workspaceId", 100),
     publication,
     brand: optionalString(value.brand, "brand", 200),
     hook: optionalString(value.hook, "hook"),
@@ -137,7 +137,6 @@ export async function POST(request: Request) {
       variationId: generationRequest.variationId
     });
     const knowledge = buildContext();
-    const prompt = buildPrompt(knowledge, generationRequest);
     const configuredProvider = (process.env.AI_PROVIDER?.trim() || "openai") as AIProvider;
     const requestedModel = process.env.OPENAI_MODEL?.trim() || "gpt-5.5";
     const configuredTemperature = process.env.OPENAI_TEMPERATURE === undefined
@@ -148,32 +147,43 @@ export async function POST(request: Request) {
     let usage: TokenUsage | undefined;
     let fallbackUsed = false;
     let providerError: AIError | undefined;
+    let promptText = "";
+    let ragMetrics: AIGenerationApiResponse["meta"]["rag"] | undefined;
     let generated: GeneratedPublicationPayload;
 
     try {
-      const client = getAIProvider(configuredProvider);
-      const result = await client.generate({
+      const pipeline = await runRagGenerationPipeline({
+        workspaceId: generationRequest.workspaceId ?? "grr",
+        knowledge,
+        request: generationRequest,
+        provider: configuredProvider,
         model: requestedModel,
-        prompt,
         temperature: generationRequest.temperature ?? configuredTemperature,
         timeoutMs: environmentNumber("OPENAI_TIMEOUT_MS", 45000, 1000, 120000),
         maxRetries: environmentNumber("OPENAI_MAX_RETRIES", 2, 0, 3),
         signal: request.signal
       });
+      const result = pipeline.providerResult;
       usage = result.usage;
       model = result.model;
-      provider = client.id;
+      provider = pipeline.providerClient.id;
+      promptText = pipeline.prompt.prompt;
+      ragMetrics = pipeline.metrics;
       generated = enforceFormatRequirements(parseGeneratedPublication(result.rawContent), generationRequest.type);
-      developmentInfo("Proveedor procesado", { requestId, provider, model, usage, generatedKeys: Object.keys(generated) });
+      developmentInfo("Proveedor procesado", { requestId, provider, model, usage, rag: ragMetrics, generatedKeys: Object.keys(generated) });
     } catch (error) {
-      providerError = normalizeAIError(error);
+      if (error instanceof RagGenerationPipelineError) {
+        promptText = error.prompt.prompt;
+        ragMetrics = error.metrics;
+      }
+      providerError = normalizeAIError(error instanceof RagGenerationPipelineError ? error.cause : error);
       if (request.signal.aborted) throw providerError;
       developmentLog(requestId, providerError);
       generated = createGenerationFallback(generationRequest, knowledge);
       fallbackUsed = true;
       provider = "mock";
       model = "grr-fallback-v1";
-      usage ??= estimateTokenUsage(prompt.prompt, JSON.stringify(generated));
+      usage ??= estimateTokenUsage(promptText, JSON.stringify(generated));
     }
 
     const officialCta = generationRequest.publication?.cta || knowledge.ctas.primary;
@@ -184,12 +194,12 @@ export async function POST(request: Request) {
     };
 
     const durationMs = Date.now() - startedAt;
-    const finalUsage = usage ?? estimateTokenUsage(prompt.prompt, JSON.stringify(generated));
+    const finalUsage = usage ?? estimateTokenUsage(promptText, JSON.stringify(generated));
     recordGeneration({
       id: requestId,
       date: new Date().toISOString(),
       type: generationRequest.type,
-      prompt: prompt.prompt,
+      prompt: promptText,
       model,
       provider,
       durationMs,
@@ -206,7 +216,7 @@ export async function POST(request: Request) {
     const response: AIGenerationApiResponse = {
       content: toGeneratedContent(generated),
       generated,
-      meta: { requestId, provider, model, usage: finalUsage, durationMs, fallbackUsed }
+      meta: { requestId, provider, model, usage: finalUsage, durationMs, fallbackUsed, rag: ragMetrics }
     };
     developmentInfo("Respuesta enviada al frontend", { requestId, status: 200, response, durationMs });
     return NextResponse.json(response, { headers: { "Cache-Control": "no-store" } });

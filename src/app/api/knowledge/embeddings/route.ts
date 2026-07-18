@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { AIError, normalizeAIError } from "@/lib/ai/errors";
 import { chunkDocument, EmbeddingEngine, type EmbeddingGenerationSummary, type KnowledgeDocument } from "@/lib/knowledge";
-import { OpenAIEmbeddingProvider } from "@/lib/knowledge/embeddings/server";
+import { getWorkspaceEmbeddingEngine } from "@/lib/knowledge/embeddings/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,14 +53,8 @@ function toPublicResults(results: Awaited<ReturnType<EmbeddingEngine["search"]>>
   }));
 }
 
-const engines = new Map<string, EmbeddingEngine>();
-
 function getEngine(workspaceId: string): EmbeddingEngine {
-  const existing = engines.get(workspaceId);
-  if (existing) return existing;
-  const engine = new EmbeddingEngine(new OpenAIEmbeddingProvider());
-  engines.set(workspaceId, engine);
-  return engine;
+  return getWorkspaceEmbeddingEngine(workspaceId);
 }
 
 function developmentInfo(message: string, details: Record<string, unknown>) {

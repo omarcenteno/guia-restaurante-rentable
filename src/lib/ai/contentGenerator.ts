@@ -80,6 +80,7 @@ export function getPublicationGenerationContext(publication: Publication): Publi
 
 export interface PublicationGenerationOptions {
   regenerate?: boolean;
+  workspaceId?: string;
 }
 
 export interface PublicationGenerationResult extends GeneratedContent {
@@ -131,6 +132,7 @@ export async function generatePublication(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type,
+        workspaceId: options.workspaceId,
         publication,
         hook: publication.hook,
         topic: publication.topic,

@@ -58,6 +58,7 @@ export interface AIModel {
 
 export interface GenerationRequest {
   type: GenerationType;
+  workspaceId?: string;
   publication?: Publication;
   brand?: string;
   hook?: string;
@@ -166,6 +167,7 @@ export interface GeneratedPublicationPayload {
 
 export interface AIGenerationApiRequest {
   type: GenerationType;
+  workspaceId?: string;
   publication?: Publication;
   brand?: string;
   hook?: string;
@@ -188,12 +190,27 @@ export interface AIGenerationMeta {
   usage: TokenUsage;
   durationMs: number;
   fallbackUsed: boolean;
+  rag?: AIGenerationRagMetrics;
 }
 
 export interface AIGenerationApiResponse {
   content: GeneratedContent;
   generated: GeneratedPublicationPayload;
   meta: AIGenerationMeta;
+}
+
+export interface AIGenerationRagMetrics {
+  workspaceId: string;
+  contextChunks: number;
+  contextTokens: number;
+  contextCompression: number;
+  documentsUsed: number;
+  searchMs: number;
+  builderMs: number;
+  promptMs: number;
+  totalMs: number;
+  fallbackUsed: boolean;
+  promptIncludesContext: boolean;
 }
 
 export interface AIProviderRequest {
